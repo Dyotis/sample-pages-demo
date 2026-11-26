@@ -2,291 +2,588 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#0e0f13">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="theme-color" content="#f0912b">
 <title>Air Band</title>
 <style>
 /*
-VOICE: a stage toy — loud, simple, one big readout you can see at arm's length.
-IDEA: a stage light that changes colour with each instrument.
-PICTURE: full-screen colour field, giant instrument name, live note, tilt meter.
-COLOUR/TYPE: per-instrument colour (amber guitar, ivory/blue piano, red drums), Archivo Black + Inter.
-LAYOUT: one column; header strip, big centre, bottom guide.
+VOICE: a stage toy you wave around. It must read at arm's length, so there is no decoration.
+IDEA: one flat stage-light colour for each instrument. The screen is a strip of three keys.
+PICTURE: the working thing itself: left note, focused note, right note, and a tilt ruler under them.
+COLOUR AND TYPE: ivory and black piano, sunburst amber guitar, red drums. Archivo Black names, Inter help text.
+LAYOUT: always landscape. Instrument bar, three tiles, tilt ruler, one hint line.
 */
-@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;600&display=swap');
-:root{--bg:#0e0f13;--ink:#f4f1ea;--acc:#ffb23e}
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@500;700&display=swap');
+:root{--bg:#f0912b;--ink:#1e1206;--soft:rgba(30,18,6,.13);--mute:rgba(30,18,6,.78);--pin:#fff6e6;--pinline:#1e1206;
+  --u:1.4px;--w:6.4px;--big:'Archivo Black',Impact,'Arial Black',sans-serif}
 *{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;margin:0}
-body{background:var(--bg);color:var(--ink);font:16px/1.45 Inter,system-ui,sans-serif;overflow:hidden;
-  transition:background .4s;user-select:none;-webkit-user-select:none;touch-action:manipulation}
-#app{height:100%;display:flex;flex-direction:column;padding:max(14px,env(safe-area-inset-top)) 18px max(14px,env(safe-area-inset-bottom))}
-header{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:600;font-size:14px}
-.pill{border:1.5px solid currentColor;border-radius:99px;padding:8px 14px;background:none;color:inherit;font:inherit;min-height:44px}
-.pill.on{background:var(--ink);color:var(--bg)}
-main{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:10px}
-#inst{font:clamp(48px,16vw,96px)/1 'Archivo Black',Impact,sans-serif;color:var(--acc);transition:color .3s,transform .15s}
-#how{font-size:15px;opacity:.8;max-width:30ch}
-#note{font:clamp(40px,12vw,72px)/1 'Archivo Black',Impact,sans-serif;min-height:1.1em}
-.hit #inst{transform:scale(1.08)}
-#meter{width:min(320px,85vw);height:46px;position:relative;border-radius:12px;background:rgba(255,255,255,.08);overflow:hidden;display:flex}
-#meter span{flex:1;border-right:1px solid rgba(255,255,255,.1);display:flex;align-items:flex-end;justify-content:center;font-size:12px;padding-bottom:4px;opacity:.7}
-#meter span.cur{background:var(--acc);color:var(--bg);opacity:1;font-weight:600}
-#pad{width:min(320px,85vw);margin-top:6px;padding:16px;border-radius:16px;border:1.5px dashed rgba(255,255,255,.3);font-size:14px;opacity:.75}
-footer{font-size:13px;opacity:.75;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}
-footer div{padding:8px 4px;border-radius:10px;background:rgba(255,255,255,.06)}
-footer b{display:block;font-size:14px}
-footer .cur{outline:2px solid var(--acc)}
-#start{position:fixed;inset:0;background:#0e0f13;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:18px;padding:28px;text-align:center;z-index:5}
-#start h1{font:clamp(44px,14vw,80px)/1 'Archivo Black',Impact,sans-serif;margin:0;color:#ffb23e}
-#start p{max-width:34ch;margin:0;opacity:.85}
-#go{font:20px 'Archivo Black',Impact,sans-serif;padding:18px 40px;border-radius:99px;border:0;background:#ffb23e;color:#0e0f13;min-height:56px}
-#err{color:#ff8a7a;font-size:14px;max-width:34ch}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}.hit #inst{transform:none}}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
+body{background:var(--bg);color:var(--ink);font:500 15px/1.35 Inter,system-ui,-apple-system,sans-serif;
+  transition:background-color .25s;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;
+  appearance:none;-webkit-appearance:none;touch-action:manipulation}
+button:focus-visible{outline:3px solid var(--pin);outline-offset:2px}
+
+/* play screen */
+#wrap{position:fixed;left:0;top:0;width:100%;height:100%;transform-origin:0 0}
+#app{height:100%;display:flex;flex-direction:column;gap:8px;padding:8px 12px;touch-action:none}
+header{flex:none;display:flex;flex-wrap:wrap;gap:8px;min-height:44px}
+#insts{flex:1 1 280px;position:relative;display:flex;border-radius:12px;background:var(--soft)}
+#insts button{flex:1;height:44px;border-radius:12px;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden}
+#insts small{font:500 13px Inter,system-ui,sans-serif;color:var(--mute);margin-left:6px}
+#insts .cur{background:var(--ink);color:var(--bg)}
+#insts .cur small{color:inherit;opacity:.8}
+.tight #insts small{display:none}
+#iptr,#ptr{position:absolute;width:5px;margin-left:-2.5px;border-radius:3px;background:var(--pin);
+  box-shadow:0 0 0 1.5px var(--pinline);pointer-events:none}
+#iptr{bottom:-3px;height:12px;left:50%}
+.btn{flex:none;height:44px;min-width:44px;padding:0 12px;border-radius:12px;background:var(--soft);
+  font-weight:700;font-size:14px;white-space:nowrap;display:flex;align-items:center;justify-content:center}
+.btn.on{background:var(--ink);color:var(--bg)}
+
+#stage{flex:1;min-height:0;display:flex;gap:10px}
+.tile{position:relative;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;overflow:hidden}
+.side{flex:0 0 24%;background:var(--soft)}
+.mid{flex:1;background:var(--ink);color:var(--bg)}
+.lab{font-family:var(--big);line-height:1;white-space:nowrap}
+.mid .lab{font-size:min(calc(var(--u)*52),calc(var(--w)*18))}
+.side .lab{font-size:min(calc(var(--u)*30),calc(var(--w)*9))}
+.long .mid .lab{font-size:min(calc(var(--u)*38),calc(var(--w)*10.5))}
+.long .side .lab{font-size:min(calc(var(--u)*20),calc(var(--w)*5))}
+.sub{font-size:13px;line-height:1.2;white-space:nowrap}
+.side .sub{color:var(--mute)}
+.mid .sub{opacity:.8}
+.side.end{background:none;box-shadow:inset 0 0 0 2px var(--soft)}
+.side.end .lab,.long .side.end .lab{font-size:min(calc(var(--u)*18),calc(var(--w)*5));color:var(--mute)}
+@keyframes hit{0%{transform:scale(1.05);box-shadow:0 0 0 8px var(--pin)}100%{transform:scale(1);box-shadow:0 0 0 0 transparent}}
+@keyframes fromR{0%{transform:translateX(26%);opacity:.3}100%{transform:none;opacity:1}}
+@keyframes fromL{0%{transform:translateX(-26%);opacity:.3}100%{transform:none;opacity:1}}
+.mid.hit{animation:hit .18s ease-out}
+.goR .lab{animation:fromR .12s ease-out}
+.goL .lab{animation:fromL .12s ease-out}
+
+#ruler{flex:none;position:relative;height:40px;margin-bottom:2px}
+#cells{display:flex;height:100%;border-radius:10px;background:var(--soft);overflow:hidden}
+#cells span{flex:1;display:flex;align-items:center;justify-content:center;padding-bottom:10px;font-size:13px;font-weight:700;
+  white-space:nowrap;box-shadow:inset 1px 0 0 var(--soft)}
+#cells span:first-child{box-shadow:none}
+#cells .cur{background:var(--ink);color:var(--bg)}
+#ptr{bottom:-4px;height:16px;width:6px;margin-left:-3px;left:50%}
+#hint{flex:none;margin:0;height:18px;font-size:13px;line-height:18px;text-align:center;color:var(--mute);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* settings */
+#panel{position:absolute;top:0;left:0;right:0;bottom:0;z-index:3;background:rgba(0,0,0,.5);display:flex;padding:10px}
+.sheet{margin:auto;width:min(700px,100%);max-height:100%;overflow:auto;touch-action:pan-x pan-y;background:var(--bg);color:var(--ink);
+  border-radius:18px;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.top h2{margin:0;font:400 20px/1 var(--big)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px}
+.row{background:var(--soft);border-radius:12px;padding:8px 10px;display:flex;align-items:center;gap:10px}
+.row>div:first-child{flex:1}
+.row b{display:block;font-size:14px;font-weight:700}
+.row .d{display:block;font-size:13px;color:var(--mute)}
+.stp,.seg{flex:none;display:flex;align-items:center;gap:6px}
+.stp output{min-width:1.6em;text-align:center;font:400 22px/1 var(--big)}
+.k{flex:none;height:44px;min-width:44px;padding:0 12px;border-radius:10px;background:var(--ink);color:var(--bg);font-weight:700;font-size:16px}
+.k.off{background:none;color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}
+
+/* start screen */
+#start{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5;display:flex;overflow:auto;background:#f0912b;color:#1e1206;padding:18px 22px}
+#start .in{margin:auto;display:flex;flex-direction:column;align-items:center;gap:18px;max-width:760px}
+#start .a{display:flex;flex-direction:column;align-items:center;gap:14px;flex:none}
+#start .b{display:flex;flex-direction:column;gap:10px}
+#start h1{margin:0;font:400 clamp(44px,13vmin,84px)/1 var(--big);white-space:nowrap}
+#start ol{margin:0;padding-left:1.3em;font-size:16px;line-height:1.5;max-width:36ch}
+#start small{font-size:13px;color:rgba(30,18,6,.78);max-width:40ch}
+#go{height:56px;padding:0 34px;border-radius:99px;background:#1e1206;color:#f0912b;font:400 20px/1 var(--big);white-space:nowrap}
+#err{margin:0;font-size:14px;font-weight:700;max-width:30ch;text-align:center}
+#err:empty{display:none}
+@media (orientation:landscape) and (max-height:520px){#start .in{flex-direction:row;gap:32px}}
+@media (prefers-reduced-motion:reduce){.mid.hit,.goR .lab,.goL .lab{animation:none}body{transition:none}}
 </style>
 </head>
 <body>
-<div id="start">
-  <h1>Air Band</h1>
-  <p>Hold the phone. Move it like a real instrument. Turn the phone to change the instrument.</p>
-  <button id="go">Start playing</button>
-  <p id="err"></p>
-</div>
+<div id="start"><div class="in">
+  <div class="a">
+    <h1>Air Band</h1>
+    <button id="go">Start playing</button>
+    <p id="err" role="alert"></p>
+  </div>
+  <div class="b">
+    <ol>
+      <li>Turn the phone sideways. Hold it with two hands.</li>
+      <li>Tilt left or right to move to the next note.</li>
+      <li>Jab the phone, or tap the screen, to play the note.</li>
+      <li>Lay the phone flat for piano. Lift it half up for guitar. Hold it upright for drums.</li>
+    </ol>
+    <small>Version 3. On iPhone, tap Allow for motion and turn off silent mode.</small>
+  </div>
+</div></div>
 
-<div id="app">
-  <header>
-    <button class="pill" id="lock">Auto instrument</button>
-    <span id="sens">Sensors: off</span>
-  </header>
-  <main>
-    <div id="inst">Guitar</div>
-    <div id="how">Strum down. Tilt left or right to change the chord.</div>
-    <div id="note">&nbsp;</div>
-    <div id="meter"></div>
-    <div id="pad">No motion sensor? Tap this area to play.</div>
-  </main>
-  <footer>
-    <div data-i="guitar"><b>Guitar</b>Phone upright</div>
-    <div data-i="piano"><b>Piano</b>Phone flat</div>
-    <div data-i="drums"><b>Drums</b>Phone sideways</div>
-  </footer>
+<div id="wrap">
+  <div id="app">
+    <header>
+      <div id="insts" role="group" aria-label="Instrument">
+        <button data-k="piano">Piano<small>flat</small></button>
+        <button data-k="guitar">Guitar<small>half up</small></button>
+        <button data-k="drums">Drums<small>upright</small></button>
+        <i id="iptr" hidden></i>
+      </div>
+      <button class="btn on" id="auto" aria-pressed="true" hidden>Auto</button>
+      <button class="btn" id="cen">Set center</button>
+      <button class="btn" id="gear" aria-label="Settings"><svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h8M18 6h1M3 16h1M11 16h8"/><circle cx="14.5" cy="6" r="2.6"/><circle cx="7.5" cy="16" r="2.6"/></svg></button>
+    </header>
+    <main id="stage">
+      <button class="tile side" id="tl"><span class="lab"></span><span class="sub"></span></button>
+      <button class="tile mid" id="tc"><span class="lab"></span><span class="sub"></span></button>
+      <button class="tile side" id="tr"><span class="lab"></span><span class="sub"></span></button>
+    </main>
+    <div id="ruler"><div id="cells"></div><i id="ptr"></i></div>
+    <p id="hint"></p>
+  </div>
+
+  <div id="panel" hidden><div class="sheet" role="dialog" aria-label="Settings">
+    <div class="top"><h2>Settings</h2><button class="k" id="done">Done</button></div>
+    <div class="grid">
+      <div class="row"><div><b>Tilt sensitivity</b><span class="d" id="tsd"></span></div>
+        <div class="stp"><button class="k" data-k="ts" data-d="-1" aria-label="Less tilt sensitivity">&minus;</button><output id="tso"></output><button class="k" data-k="ts" data-d="1" aria-label="More tilt sensitivity">+</button></div></div>
+      <div class="row"><div><b>Hit sensitivity</b><span class="d" id="hsd"></span></div>
+        <div class="stp"><button class="k" data-k="hs" data-d="-1" aria-label="Less hit sensitivity">&minus;</button><output id="hso"></output><button class="k" data-k="hs" data-d="1" aria-label="More hit sensitivity">+</button></div></div>
+      <div class="row"><div><b>Tilt style</b><span class="d" id="msd"></span></div>
+        <div class="seg"><button class="k" data-m="follow">Follow</button><button class="k" data-m="step">Step</button></div></div>
+      <div class="row"><div><b>Swap left and right</b><span class="d">Use this if the notes move the wrong way.</span></div>
+        <button class="k off" id="swap" aria-pressed="false">Off</button></div>
+    </div>
+  </div></div>
 </div>
 
 <script>
 {
-const $ = s => document.querySelector(s);
-const INST = {
-  guitar:{name:'Guitar',color:'#ffb23e',bg:'#1a1208',how:'Strum down. Tilt left or right to change the chord.',
-    slots:['Em','C','G','D','Am','F']},
-  piano:{name:'Piano',color:'#8fc7ff',bg:'#0b1424',how:'Tap the air (quick jab down). Tilt left or right to pick the note.',
-    slots:['C','D','E','G','A','C5','D5','E5']},
-  drums:{name:'Drums',color:'#ff5a4e',bg:'#200b0b',how:'Hit the air like a drumstick. Tilt to pick the drum.',
-    slots:['Kick','Snare','Hi-hat','Tom','Crash']}
-};
-const CHORDS = { // guitar voicings as MIDI notes, low to high
-  Em:[40,47,52,55,59,64], C:[48,52,55,60,64], G:[43,47,50,55,59,67],
-  D:[50,57,62,66], Am:[45,52,57,60,64], F:[41,48,53,57,60,65]
-};
-const PIANO = {C:60,D:62,E:64,G:67,A:69,C5:72,D5:74,E5:76};
-const mf = m => 440*Math.pow(2,(m-69)/12);
+const $=s=>document.querySelector(s);
+const D2R=Math.PI/180,R2D=180/Math.PI;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const TOUCH=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
 
-let ctx, master, noiseBuf, cur='guitar', locked=null, slot=0, lastHit=0;
-let grav={x:0,y:-9.8,z:0}, tilt=0, gotMotion=false;
+/* ---------- instruments ---------- */
+// items go from left to right. home = the item at the center position. spread = how much wider one step is than a piano step.
+const INST={
+  piano:{name:'Piano',unit:'note',spread:1,home:5,items:['G3','A3','B3','C4','D4','E4','F4','G4','A4','B4','C5'],
+    bg:'#f2ede2',ink:'#14161a',soft:'rgba(20,22,26,.1)',mute:'rgba(20,22,26,.7)',pin:'#c62531',pinline:'#ffffff'},
+  guitar:{name:'Guitar',unit:'chord',spread:1.3,home:3,items:['Dm','Am','C','G','D','Em','F'],
+    bg:'#f0912b',ink:'#1e1206',soft:'rgba(30,18,6,.13)',mute:'rgba(30,18,6,.78)',pin:'#fff6e6',pinline:'#1e1206'},
+  drums:{name:'Drums',unit:'drum',spread:1.6,home:2,items:['Crash','Hi-hat','Snare','Kick','Tom'],
+    bg:'#a51d2b',ink:'#fff2e2',soft:'rgba(255,242,226,.15)',mute:'rgba(255,242,226,.8)',pin:'#14161a',pinline:'#fff2e2'}
+};
+const MIDI={G3:55,A3:57,B3:59,C4:60,D4:62,E4:64,F4:65,G4:67,A4:69,B4:71,C5:72};
+const CHORDS={Dm:[50,57,62,65],Am:[45,52,57,60,64],C:[48,52,55,60,64],G:[43,47,50,55,59,67],
+  D:[50,57,62,66],Em:[40,47,52,55,59,64],F:[41,48,53,57,60,65]};
+const mf=m=>440*Math.pow(2,(m-69)/12);
 
-/* ---------- audio ---------- */
+/* ---------- settings ---------- */
+const GAPS=[22,18,15,13,11,9.5,8,7,6,5];          // degrees of tilt for one piano note, level 1 to 10
+const HITS=[24,20,17,14.5,12.5,10.5,9,7.5,6,4.5]; // jab force (m/s2) for a hit, level 1 to 10
+const LS='airband3';
+const cfg={ts:7,hs:6,mode:'follow',swap:false};
+try{
+  const o=JSON.parse(localStorage.getItem(LS)||'{}');
+  if(o.ts>=1&&o.ts<=10) cfg.ts=Math.round(o.ts);
+  if(o.hs>=1&&o.hs<=10) cfg.hs=Math.round(o.hs);
+  if(o.mode==='step') cfg.mode='step';
+  cfg.swap=!!o.swap;
+}catch(e){}
+const save=()=>{try{localStorage.setItem(LS,JSON.stringify(cfg))}catch(e){}};
+
+/* ---------- state ---------- */
+let cur='guitar',locked=null,started=false,sensors=false,oriOK=false,motOK=false,startT=0,permNote='',why='';
+const idx={piano:INST.piano.home,guitar:INST.guitar.home,drums:INST.drums.home};
+const up={x:0,y:0,z:1},lp={x:0,y:0,z:0};      // "up" direction in phone axes
+let uiTop=1,flipT=0,rotated=false;const topMap={};
+let tilt=0,center=0,face=45,pos=idx.guitar;
+let cand='guitar',candT=0,instHold=0;
+let armedStep=true,stepT=0,freezeUntil=0;const chg=[];   // chg = the last note changes
+let peak=0,armedHit=true,lastHit=0,prevU=null,prevUT=0,flashT=0,wl=null;
+const WRAP=$('#wrap'),APP=$('#app'),STAGE=$('#stage'),TL=$('#tl'),TC=$('#tc'),TR=$('#tr'),
+  CELLS=$('#cells'),PTR=$('#ptr'),IPTR=$('#iptr'),HINT=$('#hint'),PANEL=$('#panel');
+const gapDeg=()=>GAPS[cfg.ts-1]*INST[cur].spread;
+const buzz=ms=>{try{if(navigator.vibrate)navigator.vibrate(ms)}catch(e){}};
+
+/* ---------- sound ---------- */
+let ctx,master,noiseBuf;
 function initAudio(){
-  ctx = new (window.AudioContext||window.webkitAudioContext)();
-  const comp = ctx.createDynamicsCompressor();
-  master = ctx.createGain(); master.gain.value = 0.9;
-  master.connect(comp); comp.connect(ctx.destination);
-  noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-  const d = noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  const AC=window.AudioContext||window.webkitAudioContext;
+  ctx=new AC();
+  const comp=ctx.createDynamicsCompressor();
+  master=ctx.createGain();master.gain.value=0.9;
+  master.connect(comp);comp.connect(ctx.destination);
+  noiseBuf=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);
+  const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
 }
-const ksCache = {};
-function pluckBuf(f){ // Karplus-Strong plucked string
-  const k = Math.round(f);
-  if(ksCache[k]) return ksCache[k];
-  const sr = ctx.sampleRate, len = Math.floor(sr*2.2), N = Math.max(2,Math.round(sr/f));
-  const b = ctx.createBuffer(1,len,sr), o = b.getChannelData(0), ring = new Float32Array(N);
-  for(let i=0;i<N;i++) ring[i]=Math.random()*2-1;
+const ks={};
+function pluckBuf(f){ // plucked string (Karplus-Strong)
+  const k=Math.round(f);
+  if(ks[k])return ks[k];
+  const sr=ctx.sampleRate,len=Math.floor(sr*2.2),N=Math.max(2,Math.round(sr/f));
+  const b=ctx.createBuffer(1,len,sr),o=b.getChannelData(0),ring=new Float32Array(N);
+  for(let i=0;i<N;i++)ring[i]=Math.random()*2-1;
   let p=0;
-  for(let i=0;i<len;i++){ const n=(p+1)%N; const v=(ring[p]+ring[n])*0.4985; o[i]=ring[p]; ring[p]=v; p=n; }
-  return ksCache[k]=b;
+  for(let i=0;i<len;i++){const n=(p+1)%N;const v=(ring[p]+ring[n])*0.4985;o[i]=ring[p];ring[p]=v;p=n;}
+  return ks[k]=b;
 }
-function strum(name, vel){
-  const notes = CHORDS[name], t0 = ctx.currentTime;
-  notes.forEach((m,i)=>{
-    const s = ctx.createBufferSource(); s.buffer = pluckBuf(mf(m));
-    const g = ctx.createGain(); g.gain.value = 0.32*vel;
-    s.connect(g); g.connect(master); s.start(t0 + i*0.018);
+function strum(name,vel){
+  const t0=ctx.currentTime;
+  CHORDS[name].forEach((m,i)=>{
+    const s=ctx.createBufferSource();s.buffer=pluckBuf(mf(m));
+    const g=ctx.createGain();g.gain.value=0.32*vel;
+    s.connect(g);g.connect(master);s.start(t0+i*0.018);
   });
 }
-function pianoNote(m, vel){
-  const t = ctx.currentTime, f = mf(m), out = ctx.createGain();
-  out.gain.setValueAtTime(0.0001,t); out.gain.exponentialRampToValueAtTime(0.5*vel,t+0.008);
+function pianoNote(m,vel){
+  const t=ctx.currentTime,f=mf(m),out=ctx.createGain();
+  out.gain.setValueAtTime(0.0001,t);out.gain.exponentialRampToValueAtTime(0.5*vel,t+0.008);
   out.gain.exponentialRampToValueAtTime(0.0001,t+2.2);
-  const lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = 3500;
-  out.connect(lp); lp.connect(master);
+  const lpf=ctx.createBiquadFilter();lpf.type='lowpass';lpf.frequency.value=3500;
+  out.connect(lpf);lpf.connect(master);
   [[1,1],[2,0.45],[3,0.2],[4,0.1]].forEach(([h,a])=>{
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = h===1?'triangle':'sine'; o.frequency.value = f*h; g.gain.value = a;
-    o.connect(g); g.connect(out); o.start(t); o.stop(t+2.3);
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type=h===1?'triangle':'sine';o.frequency.value=f*h;g.gain.value=a;
+    o.connect(g);g.connect(out);o.start(t);o.stop(t+2.3);
   });
 }
-function noise(t, dur, type, freq, gain){
-  const s = ctx.createBufferSource(); s.buffer = noiseBuf;
-  const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq;
-  const g = ctx.createGain(); g.gain.setValueAtTime(gain,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-  s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t+dur+0.05);
+function noise(t,dur,type,freq,gain){
+  const s=ctx.createBufferSource();s.buffer=noiseBuf;
+  const f=ctx.createBiquadFilter();f.type=type;f.frequency.value=freq;
+  const g=ctx.createGain();g.gain.setValueAtTime(gain,t);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  s.connect(f);f.connect(g);g.connect(master);s.start(t);s.stop(t+dur+0.05);
 }
-function tone(t, f0, f1, dur, gain){
-  const o = ctx.createOscillator(), g = ctx.createGain();
-  o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f1,t+dur*0.6);
-  g.gain.setValueAtTime(gain,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.05);
+function tone(t,f0,f1,dur,gain){
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+dur*0.6);
+  g.gain.setValueAtTime(gain,t);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g);g.connect(master);o.start(t);o.stop(t+dur+0.05);
 }
-function drum(name, vel){
-  const t = ctx.currentTime;
-  if(name==='Kick'){ tone(t,150,45,0.45,1.0*vel); }
-  if(name==='Snare'){ tone(t,220,160,0.12,0.5*vel); noise(t,0.22,'highpass',1500,0.7*vel); }
-  if(name==='Hi-hat'){ noise(t,0.07,'highpass',7500,0.5*vel); }
-  if(name==='Tom'){ tone(t,180,90,0.35,0.8*vel); }
-  if(name==='Crash'){ noise(t,1.4,'highpass',5000,0.55*vel); noise(t,0.6,'bandpass',3000,0.3*vel); }
+function drum(name,vel){
+  const t=ctx.currentTime;
+  if(name==='Kick')tone(t,150,45,0.45,1.0*vel);
+  if(name==='Snare'){tone(t,220,160,0.12,0.5*vel);noise(t,0.22,'highpass',1500,0.7*vel);}
+  if(name==='Hi-hat')noise(t,0.07,'highpass',7500,0.5*vel);
+  if(name==='Tom')tone(t,180,90,0.35,0.8*vel);
+  if(name==='Crash'){noise(t,1.4,'highpass',5000,0.55*vel);noise(t,0.6,'bandpass',3000,0.3*vel);}
+}
+function prewarm(){ // build the guitar strings before the first strum
+  const seen={};Object.keys(CHORDS).forEach(c=>CHORDS[c].forEach(m=>{seen[m]=1}));
+  const list=Object.keys(seen);
+  (function next(){const m=list.pop();if(m==null||!ctx)return;pluckBuf(mf(+m));setTimeout(next,0);})();
+}
+function play(vel,i){
+  if(!ctx)return;
+  if(ctx.state!=='running'){try{ctx.resume()}catch(e){}}
+  if(i==null)i=idx[cur];
+  const label=INST[cur].items[i];
+  if(cur==='guitar')strum(label,vel);
+  else if(cur==='piano')pianoNote(MIDI[label],vel);
+  else drum(label,vel);
+  TC.classList.remove('hit');void TC.offsetWidth;TC.classList.add('hit');
+  buzz(14);
 }
 
-/* ---------- play ---------- */
-function play(vel){
-  if(!ctx) return;
-  vel = Math.min(1, Math.max(0.35, vel));
-  const label = INST[cur].slots[slot];
-  if(cur==='guitar') strum(label, vel);
-  else if(cur==='piano') pianoNote(PIANO[label], vel);
-  else drum(label, vel);
-  $('#note').textContent = label;
-  document.body.classList.add('hit');
-  setTimeout(()=>document.body.classList.remove('hit'),120);
-  if(navigator.vibrate) try{navigator.vibrate(15)}catch(e){}
+/* ---------- drawing ---------- */
+function side(el,label,sub){
+  const end=label==null;
+  el.classList.toggle('end',end);
+  el.firstElementChild.textContent=end?'End':label;
+  el.lastElementChild.textContent=end?'':sub;
+}
+function drawTiles(dir){
+  const I=INST[cur],n=I.items.length,i=idx[cur];
+  side(TL,i>0?I.items[i-1]:null,sensors?'← tilt left':'tap');
+  TC.firstElementChild.textContent=I.items[i];
+  TC.lastElementChild.textContent=sensors?'jab or tap to play':'tap to play';
+  side(TR,i<n-1?I.items[i+1]:null,sensors?'tilt right →':'tap');
+  const c=CELLS.children;for(let j=0;j<c.length;j++)c[j].classList.toggle('cur',j===i);
+  if(dir){STAGE.classList.remove('goL','goR');void STAGE.offsetWidth;STAGE.classList.add(dir>0?'goR':'goL');}
+}
+function hint(){
+  clearTimeout(flashT);
+  const u=INST[cur].unit,g=Math.round(gapDeg());
+  HINT.textContent=!sensors
+    ?'Sensors off'+(why?': '+why:'')+'. Tap a tile to play.'
+    :cfg.mode==='follow'
+      ?'Tilt '+g+'° to move one '+u+'. Jab or tap to play.'
+      :'Tilt '+g+'°, then go back, to move one '+u+'. Jab or tap to play.';
+}
+function flash(msg){clearTimeout(flashT);HINT.textContent=msg;flashT=setTimeout(hint,2000);}
+function sheet(){
+  $('#tso').textContent=cfg.ts;$('#hso').textContent=cfg.hs;
+  $('#tsd').textContent=Math.round(gapDeg())+'° of tilt moves one '+INST[cur].unit+'.';
+  $('#hsd').textContent=cfg.hs>=8?'A light jab plays the note.':cfg.hs<=3?'Only a strong jab plays the note.':'A medium jab plays the note.';
+  document.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('off',b.dataset.m!==cfg.mode));
+  $('#msd').textContent=cfg.mode==='follow'?'The note follows the tilt angle.':'Each tilt moves one note. Go back to center, then tilt again.';
+  const s=$('#swap');s.textContent=cfg.swap?'On':'Off';s.classList.toggle('off',!cfg.swap);s.setAttribute('aria-pressed',cfg.swap);
+}
+function paint(){
+  const I=INST[cur],r=document.documentElement.style;
+  ['bg','ink','soft','mute','pin','pinline'].forEach(k=>r.setProperty('--'+k,I[k]));
+  const m=$('meta[name=theme-color]');if(m)m.content=I.bg;
+  CELLS.innerHTML=I.items.map(s=>'<span>'+s+'</span>').join('');
+  document.querySelectorAll('#insts button').forEach(b=>{
+    const on=b.dataset.k===cur;b.classList.toggle('cur',on);b.setAttribute('aria-pressed',on);});
+  STAGE.classList.toggle('long',cur==='drums');
+  drawTiles(0);hint();sheet();
+}
+function autoUI(){
+  const on=!locked,a=$('#auto');
+  a.classList.toggle('on',on);a.setAttribute('aria-pressed',on);
+  a.hidden=!sensors;IPTR.hidden=!sensors||!on;
+}
+function layout(){ // the play screen is always landscape. If the page is portrait, turn the screen sideways.
+  const w=window.innerWidth,h=window.innerHeight,s=WRAP.style;
+  rotated=TOUCH&&h>w;
+  if(rotated){
+    s.width=h+'px';s.height=w+'px';
+    if(uiTop>0){s.left=w+'px';s.top='0px';s.transform='rotate(90deg)';}
+    else{s.left='0px';s.top=h+'px';s.transform='rotate(-90deg)';}
+  }else{s.width=s.height=s.left=s.top=s.transform='';}
+}
+function measure(){
+  const r=document.documentElement.style;
+  r.setProperty('--u',STAGE.clientHeight/100+'px');
+  r.setProperty('--w',STAGE.clientWidth/100+'px');
+  APP.classList.toggle('tight',APP.clientWidth<600);
+}
+let lastA='',lastB='';
+function loop(){
+  const n=INST[cur].items.length;
+  if(!sensors)pos=idx[cur];
+  const a=((pos+0.5)/n*100).toFixed(2)+'%';
+  if(a!==lastA){PTR.style.left=a;lastA=a;}
+  if(sensors&&!locked){
+    const f=face,x=f>=60?(90-f)/90:f>=24?1/3+(60-f)/108:2/3+(24-f)/108;
+    const b=(clamp(x,0.02,0.98)*100).toFixed(1)+'%';
+    if(b!==lastB){IPTR.style.left=b;lastB=b;}
+  }
+  requestAnimationFrame(loop);
 }
 
-/* ---------- position -> instrument ---------- */
-function pickInstrument(){
-  if(locked) return locked;
-  const ax=Math.abs(grav.x), ay=Math.abs(grav.y), az=Math.abs(grav.z);
-  if(az > ax && az > ay) return 'piano';   // lying flat
-  if(ax > ay) return 'drums';              // held sideways (landscape)
-  return 'guitar';                          // held upright (portrait)
+/* ---------- note selection ---------- */
+function select(i,now){
+  const old=idx[cur];if(i===old)return;
+  chg.push({t:now,from:old});if(chg.length>8)chg.shift();
+  idx[cur]=i;drawTiles(i>old?1:-1);buzz(6);
 }
-function tiltAngle(){
-  // left-right tilt in degrees, measured around the axis the phone points along
-  if(cur==='piano') return Math.atan2(grav.x, Math.abs(grav.z)) * 57.3;          // roll while flat
-  if(cur==='drums') return Math.atan2(grav.z, Math.abs(grav.x)) * 57.3;          // tip toward/away while sideways
-  return Math.atan2(grav.x, Math.abs(grav.y)) * 57.3;                            // lean while upright
+function onTilt(now){
+  const n=INST[cur].items.length,g=gapDeg(),rel=tilt-center;
+  let i=idx[cur];
+  if(cfg.mode==='follow'){
+    // the note follows the tilt angle. Each note has a fixed place. The ends are hard stops.
+    pos=clamp(INST[cur].home+rel/g,-0.4,n-0.6);
+    if(now>=freezeUntil&&Math.abs(pos-i)>0.6)i=clamp(Math.round(pos),0,n-1);
+  }else{
+    // each tilt moves one note. Go back near the center to tilt again. A held tilt repeats.
+    const s=rel>g?1:rel<-g?-1:0;
+    if(s===0){if(Math.abs(rel)<g*0.5)armedStep=true;}
+    else if((armedStep||now-stepT>420)&&now>=freezeUntil){i=clamp(i+s,0,n-1);armedStep=false;stepT=now;}
+    pos=i+clamp(rel/g,-1,1)*0.42;
+  }
+  select(i,now);
 }
-function updateSlot(){
-  const n = INST[cur].slots.length, a = Math.max(-40, Math.min(40, tilt));
-  slot = Math.min(n-1, Math.floor((a+40)/80*n));
-  [...$('#meter').children].forEach((el,i)=>el.classList.toggle('cur',i===slot));
+
+/* ---------- instrument from the phone position ---------- */
+function zone(f,c){ // f = screen angle: 90 flat, 0 upright
+  if(c==='piano')return f>55?'piano':f>24?'guitar':'drums';
+  if(c==='drums')return f<29?'drums':f<60?'guitar':'piano';
+  return f>65?'piano':f<19?'drums':'guitar';
 }
-function render(){
-  const I = INST[cur];
-  $('#inst').textContent = I.name; $('#how').textContent = I.how;
-  document.body.style.background = I.bg;
-  document.documentElement.style.setProperty('--acc', I.color);
-  $('#meter').innerHTML = I.slots.map(s=>`<span>${s}</span>`).join('');
-  document.querySelectorAll('footer div').forEach(d=>d.classList.toggle('cur', d.dataset.i===cur));
-  updateSlot();
+function setInst(k){
+  if(k===cur)return;
+  cur=k;cand=k;chg.length=0;armedStep=true;
+  const I=INST[k];
+  if(sensors&&cfg.mode==='follow')idx[k]=clamp(Math.round(I.home+(tilt-center)/gapDeg()),0,I.items.length-1);
+  paint();buzz(25);
 }
-function setInstrument(i){ if(i!==cur){ cur=i; $('#note').innerHTML='&nbsp;'; render(); } }
+function autoInst(now){
+  if(locked||now<instHold){cand=cur;return;}
+  const want=zone(face,cur);
+  if(want===cur){cand=cur;return;}
+  if(want!==cand){cand=want;candT=now;return;}
+  if(now-candT>400)setInst(want);
+}
 
 /* ---------- sensors ---------- */
-let stable=null, stableSince=0, prevMag=0, src='', permNote='', lastOrient=null;
-function feed(gx,gy,gz,lin){
-  const now = performance.now();
-  // smooth gravity (low-pass)
-  const k=0.15; grav.x+=(gx-grav.x)*k; grav.y+=(gy-grav.y)*k; grav.z+=(gz-grav.z)*k;
-  // instrument changes only after the position holds for 350 ms (prevents flicker)
-  const want = pickInstrument();
-  if(want!==stable){ stable=want; stableSince=now; }
-  else if(now-stableSince>350) setInstrument(want);
-  tilt = tiltAngle(); updateSlot();
-  // hit detection: quick jerk = a strum / hit
-  const mag = lin!=null ? lin : Math.hypot(gx-grav.x, gy-grav.y, gz-grav.z);
-  const thr = cur==='piano' ? 9 : 12, gap = cur==='drums' ? 140 : 220;
-  if(mag>thr && prevMag<=thr && now-lastHit>gap){ lastHit=now; play((mag-thr)/18+0.45); }
-  prevMag = mag;
+function viewAngle(){
+  const a=typeof window.orientation==='number'?window.orientation:(screen.orientation&&screen.orientation.angle)||0;
+  return((a%360)+360)%360;
 }
-function sensorOn(name){
-  if(src) return; src=name; gotMotion=true;
-  $('#sens').textContent='Sensors: on ('+name+')';
+function pose(now){ // find which long edge of the phone is the top of the play screen
+  const strong=Math.abs(up.x)>0.5,sgn=up.x>0?1:-1;
+  if(rotated){
+    if(strong&&sgn!==uiTop){if(!flipT)flipT=now;else if(now-flipT>600){uiTop=sgn;flipT=0;layout();}}
+    else flipT=0;
+  }else{
+    const a=viewAngle();let t=topMap[a];
+    if(strong&&t!==sgn){if(!flipT)flipT=now;else if(now-flipT>900){topMap[a]=t=sgn;flipT=0;}}
+    else flipT=0;
+    uiTop=t||(a===270?-1:1);
+  }
 }
-function onMotion(e){
-  const g = e.accelerationIncludingGravity;
-  if(!g || g.x==null) return;
-  sensorOn('motion');
-  if(src!=='motion') return;
-  const a = e.acceleration;
-  feed(g.x, g.y, g.z, (a && a.x!=null) ? Math.hypot(a.x,a.y,a.z) : null);
+function setUp(x,y,z,now){
+  up.x=x;up.y=y;up.z=z;
+  if(!sensors){sensors=true;why='';autoUI();drawTiles(0);hint();}
+  pose(now);
+  const steer=Math.asin(clamp(y,-1,1))*R2D;          // lift of the long axis of the phone
+  const raw=steer*uiTop*(cfg.swap?-1:1);             // + = the right end of the play screen is down
+  tilt+=(raw-tilt)*0.5;
+  if(Math.hypot(x,z)>0.35){
+    face+=(Math.atan2(z,Math.abs(x))*R2D-face)*0.25; // 90 = flat, 0 = upright
+    autoInst(now);
+  }
+  onTilt(now);
 }
 function onOrient(e){
-  if(e.beta==null || e.gamma==null) return;
-  sensorOn('tilt');
-  if(src!=='tilt') return;
-  // gravity vector from the tilt angles
-  const b=e.beta*Math.PI/180, c=e.gamma*Math.PI/180;
-  const gx=-9.8*Math.cos(b)*Math.sin(c), gy=9.8*Math.sin(b), gz=9.8*Math.cos(b)*Math.cos(c);
-  // hit = fast turn of the wrist (degrees changed since last event, scaled)
-  let lin=null, now=performance.now();
-  if(lastOrient){ const dt=Math.max(8,now-lastOrient.t);
-    lin=(Math.abs(e.beta-lastOrient.b)+Math.abs(e.gamma-lastOrient.c))/dt*6; }
-  lastOrient={b:e.beta,c:e.gamma,t:now};
-  feed(gx,gy,gz,lin);
-}
-
-function start(){
-  // iPhone: ask for permission FIRST, inside the tap, before any await
-  const asks=[];
-  try{
-    if(typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function')
-      asks.push(DeviceMotionEvent.requestPermission());
-    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function')
-      asks.push(DeviceOrientationEvent.requestPermission());
-  }catch(e){ permNote='permission error: '+e.message; }
-  try{ initAudio(); ctx.resume(); }catch(e){ $('#err').textContent='Audio failed: '+e.message; return; }
-  window.addEventListener('devicemotion', onMotion);
-  window.addEventListener('deviceorientation', onOrient);
-  Promise.all(asks).then(r=>{ if(r.some(x=>x!=='granted')) permNote='permission denied'; })
-    .catch(e=>{ permNote='permission blocked: '+e.message; });
-  try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').catch(()=>{}); }catch(e){}
-  $('#start').style.display='none';
-  render();
-  setTimeout(()=>{
-    if(gotMotion) return;
-    let why = permNote ||
-      (!window.isSecureContext ? 'page is not https' :
-      (typeof DeviceMotionEvent==='undefined' ? 'browser has no motion support' :
-      'no data. Open in Chrome or Safari, not inside another app'));
-    $('#sens').textContent='Sensors: off';
-    $('#pad').innerHTML='Sensors off: '+why+'.<br>Tap here to play. Or <u id="retry">tap to retry sensors</u>.';
-  }, 2500);
-}
-document.addEventListener('click', e=>{ if(e.target.id==='retry'){ e.stopPropagation(); location.reload(); }}, true);
-$('#go').addEventListener('click', start);
-
-/* tap fallback + manual lock */
-$('#pad').addEventListener('pointerdown', e=>{
-  if(!gotMotion){ // without sensors, tap position picks the slot
-    const r=e.currentTarget.getBoundingClientRect(); tilt=((e.clientX-r.left)/r.width)*80-40; updateSlot();
+  if(e.beta==null||e.gamma==null)return;
+  const now=performance.now(),b=e.beta*D2R,c=e.gamma*D2R;
+  const x=-Math.cos(b)*Math.sin(c),y=Math.sin(b),z=Math.cos(b)*Math.cos(c);
+  oriOK=true;
+  if(!motOK&&now-startT>1200){ // no motion data: use the turn speed to find a hit
+    if(prevU){
+      const d=clamp(x*prevU.x+y*prevU.y+z*prevU.z,-1,1),dt=Math.max(8,now-prevUT)/1000;
+      hitDetect(Math.acos(d)*R2D/dt/28,now);
+    }
+    prevU={x:x,y:y,z:z};prevUT=now;
   }
-  play(0.8);
+  setUp(x,y,z,now);
+}
+function onMotion(e){
+  const g=e.accelerationIncludingGravity,a=e.acceleration,now=performance.now();
+  let mag=null;
+  if(a&&a.x!=null)mag=Math.hypot(a.x,a.y,a.z);
+  if(g&&g.x!=null){
+    if(mag==null)mag=Math.abs(Math.hypot(g.x,g.y,g.z)-9.81)*1.5;
+    const s=IOS?-1:1; // iPhone gives the opposite sign
+    lp.x+=(g.x*s-lp.x)*0.2;lp.y+=(g.y*s-lp.y)*0.2;lp.z+=(g.z*s-lp.z)*0.2;
+    const m=Math.hypot(lp.x,lp.y,lp.z);
+    if(!oriOK&&now-startT>400&&m>3)setUp(lp.x/m,lp.y/m,lp.z/m,now);
+  }
+  if(mag==null)return;
+  motOK=true;
+  hitDetect(mag,now);
+}
+function hitDetect(mag,now){ // a jab = a short peak of acceleration
+  const thr=HITS[cfg.hs-1];
+  if(!armedHit){if(mag<thr*0.55)armedHit=true;return;}
+  if(now-lastHit<150)return;
+  if(mag>thr&&mag>=peak){peak=mag;return;}
+  if(peak>0){const p=peak;peak=0;armedHit=false;lastHit=now;fire(p/thr,now);}
+}
+function fire(strength,now){
+  let i=idx[cur];
+  // the jab can move the phone. If the note changed in the last instant, play the note from before.
+  if(cfg.mode==='follow'){for(let j=0;j<chg.length;j++){if(now-chg[j].t<60){i=chg[j].from;break;}}}
+  chg.length=0;
+  if(i!==idx[cur]){idx[cur]=i;drawTiles(0);}
+  freezeUntil=now+150;instHold=now+350;
+  play(clamp(0.5+(strength-1)*0.55,0.4,1),i);
+}
+
+/* ---------- start ---------- */
+function wake(){try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(l=>{wl=l}).catch(()=>{});}catch(e){}}
+function start(){
+  // iPhone: ask for motion access first, inside the tap
+  const asks=[],DME=window.DeviceMotionEvent,DOE=window.DeviceOrientationEvent;
+  try{
+    if(DME&&typeof DME.requestPermission==='function')asks.push(DME.requestPermission());
+    if(DOE&&typeof DOE.requestPermission==='function')asks.push(DOE.requestPermission());
+  }catch(e){permNote='the motion permission failed';}
+  try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}
+  try{initAudio();ctx.resume();}catch(e){$('#err').textContent='The sound did not start: '+e.message;return;}
+  startT=performance.now();
+  window.addEventListener('devicemotion',onMotion);
+  window.addEventListener('deviceorientation',onOrient);
+  Promise.all(asks).then(r=>{if(r.some(x=>x!=='granted'))permNote='motion access was denied';})
+    .catch(()=>{permNote='motion access was blocked';});
+  wake();
+  if(TOUCH&&!IOS){ // Android: full screen, and keep the screen in landscape
+    try{
+      const de=document.documentElement,p=de.requestFullscreen&&de.requestFullscreen({navigationUI:'hide'});
+      if(p&&p.then)p.then(()=>{
+        try{const q=screen.orientation&&screen.orientation.lock&&screen.orientation.lock('landscape');if(q&&q.catch)q.catch(()=>{});}catch(e){}
+      }).catch(()=>{});
+    }catch(e){}
+  }
+  started=true;$('#start').hidden=true;
+  layout();measure();paint();requestAnimationFrame(loop);
+  setTimeout(()=>{
+    if(sensors)return;
+    why=permNote||(!window.isSecureContext?'the page is not https'
+      :(!DME&&!DOE?'this browser has no motion sensors':'this browser sent no motion data'));
+    hint();
+  },2500);
+  setTimeout(prewarm,400);
+}
+$('#go').addEventListener('click',start);
+
+/* ---------- controls ---------- */
+function stepBy(d){
+  const n=INST[cur].items.length,i=idx[cur]+d;
+  if(i<0||i>=n)return false;
+  idx[cur]=i;pos=i;chg.length=0;drawTiles(d);return true;
+}
+STAGE.addEventListener('pointerdown',e=>{
+  const t=e.target.closest('.tile');if(!t)return;
+  e.preventDefault();
+  // with sensors in Follow style, the tilt selects the note, and a tap on any tile plays it
+  if(t!==TC&&(!sensors||cfg.mode==='step')){if(!stepBy(t===TL?-1:1))return;}
+  play(0.85);
 });
-const order=[null,'guitar','piano','drums'];
-$('#lock').addEventListener('click', ()=>{
-  locked = order[(order.indexOf(locked)+1)%order.length];
-  $('#lock').textContent = locked ? 'Locked: '+INST[locked].name : 'Auto instrument';
-  $('#lock').classList.toggle('on', !!locked);
-  if(locked) setInstrument(locked);
+CELLS.addEventListener('pointerdown',e=>{
+  if(sensors&&cfg.mode==='follow')return;
+  const s=e.target.closest('span');if(!s)return;
+  const i=Array.prototype.indexOf.call(CELLS.children,s),d=i-idx[cur];
+  if(d)stepBy(d);
+  play(0.85);
 });
-document.addEventListener('keydown', e=>{ if(e.key===' '){ e.preventDefault(); play(0.8); }});
-render();
+$('#insts').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  locked=b.dataset.k;setInst(locked);autoUI();
+  if(sensors)flash(INST[cur].name+' is locked. Tap Auto to unlock.');
+});
+$('#auto').addEventListener('click',()=>{
+  locked=locked?null:cur;autoUI();
+  flash(locked?INST[cur].name+' is locked. Tap Auto to unlock.':'Auto: the phone position selects the instrument.');
+});
+$('#cen').addEventListener('click',()=>{
+  if(!sensors){flash('Sensors are off. There is no tilt to set.');return;}
+  center=tilt;armedStep=true;
+  flash('Center is set. This position is now the middle '+INST[cur].unit+'.');
+});
+$('#gear').addEventListener('click',()=>{sheet();PANEL.hidden=false;});
+PANEL.addEventListener('click',e=>{
+  if(e.target===PANEL){PANEL.hidden=true;return;}
+  const b=e.target.closest('button');if(!b)return;
+  if(b.id==='done'){PANEL.hidden=true;return;}
+  if(b.dataset.k){const k=b.dataset.k;cfg[k]=clamp(cfg[k]+(+b.dataset.d),1,10);}
+  else if(b.dataset.m){cfg.mode=b.dataset.m;armedStep=true;}
+  else if(b.id==='swap'){cfg.swap=!cfg.swap;center=-center;}
+  else return;
+  save();sheet();hint();drawTiles(0);
+});
+document.addEventListener('keydown',e=>{
+  if(!started)return;
+  if(e.key==='Escape'){PANEL.hidden=true;return;}
+  if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();if(stepBy(e.key==='ArrowLeft'?-1:1))play(0.85);return;}
+  if((e.key===' '||e.key==='Enter')&&e.target.tagName!=='BUTTON'){e.preventDefault();play(0.85);}
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible'||!started)return;
+  wake();if(ctx&&ctx.state!=='running'){try{ctx.resume()}catch(e){}}
+});
+window.addEventListener('resize',()=>{layout();measure();});
+window.addEventListener('orientationchange',()=>{layout();measure();});
+if(window.ResizeObserver){const ro=new ResizeObserver(measure);ro.observe(STAGE);}
+
+layout();measure();paint();autoUI();
 }
 </script>
 </body>
