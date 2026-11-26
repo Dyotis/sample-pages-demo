@@ -122,7 +122,7 @@ header{flex:none;display:flex;flex-wrap:wrap;gap:8px;min-height:44px}
       <li>Jab the phone, or tap the screen, to play the note.</li>
       <li>Lay the phone flat for piano. Lift it half up for guitar. Hold it upright for drums.</li>
     </ol>
-    <small>Version 4. You hear a chord when the app starts. No chord? On iPhone, turn off silent mode. Then raise the volume.</small>
+    <small>Version 5. You hear a chord when the app starts. No chord? On iPhone, turn off silent mode. Then raise the volume.</small>
   </div>
 </div></div>
 
@@ -190,7 +190,7 @@ const mf=m=>440*Math.pow(2,(m-69)/12);
 
 /* ---------- settings ---------- */
 const GAPS=[22,18,15,13,11,9.5,8,7,6,5];          // degrees of tilt for one piano note, level 1 to 10
-const HITS=[24,20,17,14.5,12.5,10.5,9,7.5,6,4.5]; // jab force (m/s2) for a hit, level 1 to 10
+const HITS=[16,13,10.5,8.6,7,5.7,4.6,3.8,3.1,2.5]; // jab force (m/s2) for a hit, level 1 to 10
 const LS='airband3';
 const cfg={ts:7,hs:7,mode:'follow',swap:false};
 try{
@@ -210,7 +210,8 @@ let uiTop=1,flipT=0,rotated=false;const topMap={};
 let tilt=0,center=0,face=45,pos=idx.guitar;
 let cand='guitar',candT=0,instHold=0;
 let armedStep=true,stepT=0,freezeUntil=0;const chg=[];   // chg = the last note changes
-let peak=0,armedHit=true,lastHit=0,prevU=null,prevUT=0,flashT=0,wl=null,jabNow=0,jabLast=0;
+let peak=0,lastHit=-1e9,lastPeak=0,valley=0,turn=0,prevF=null,prevFT=0,flashT=0,wl=null,jabNow=0,jabLast=0,slowOK=false;
+const sh=[],slow={x:0,y:0,z:0};   // sh = the last left-right angles. slow = slow copy of gravity.
 const WRAP=$('#wrap'),APP=$('#app'),STAGE=$('#stage'),TL=$('#tl'),TC=$('#tc'),TR=$('#tr'),
   CELLS=$('#cells'),PTR=$('#ptr'),IPTR=$('#iptr'),HINT=$('#hint'),PANEL=$('#panel');
 const gapDeg=()=>GAPS[cfg.ts-1]*INST[cur].spread;
@@ -468,11 +469,15 @@ function pose(now){ // find which long edge of the phone is the top of the play 
     uiTop=t||(a===270?-1:1);
   }
 }
-function setUp(x,y,z,now){
+function setUp(x,y,z,now,fused){
   up.x=x;up.y=y;up.z=z;
   if(!sensors){sensors=true;why='';autoUI();drawTiles(0);hint();}
   pose(now);
   const steer=Math.asin(clamp(y,-1,1))*R2D;          // lift of the long axis of the phone
+  if(fused){                                         // degrees turned left or right in the last 0.1 s
+    sh.push({t:now,s:steer});while(sh.length>1&&now-sh[0].t>110)sh.shift();
+    turn=Math.abs(steer-sh[0].s);
+  }else turn=0;
   const raw=steer*uiTop*(cfg.swap?-1:1);             // + = the right end of the play screen is down
   tilt+=(raw-tilt)*0.5;
   if(Math.hypot(x,z)>0.35){
@@ -486,47 +491,53 @@ function onOrient(e){
   const now=performance.now(),b=e.beta*D2R,c=e.gamma*D2R;
   const x=-Math.cos(b)*Math.sin(c),y=Math.sin(b),z=Math.cos(b)*Math.cos(c);
   oriOK=true;
-  if(!motOK&&now-startT>1200){ // no motion data: use the turn speed to find a hit
-    if(prevU){
-      const d=clamp(x*prevU.x+y*prevU.y+z*prevU.z,-1,1),dt=Math.max(8,now-prevUT)/1000;
-      hitDetect(Math.acos(d)*R2D/dt/28,now);
-    }
-    prevU={x:x,y:y,z:z};prevUT=now;
+  if(!motOK&&now-startT>1200){ // no motion data: a fast tip of the screen (forward or back) is a hit
+    if(Math.hypot(x,z)>0.35){
+      const f=Math.atan2(z,Math.abs(x))*R2D;
+      if(prevF!=null)hitDetect(Math.abs(f-prevF)/(Math.max(12,now-prevFT)/1000)/55,now);
+      prevF=f;prevFT=now;
+    }else prevF=null;
   }
-  setUp(x,y,z,now);
+  setUp(x,y,z,now,true);
 }
 function onMotion(e){
   const g=e.accelerationIncludingGravity,a=e.acceleration,now=performance.now();
   let mag=null;
   if(a&&a.x!=null)mag=Math.hypot(a.x,a.y,a.z);
   if(g&&g.x!=null){
-    if(mag==null)mag=Math.abs(Math.hypot(g.x,g.y,g.z)-9.81)*1.5;
+    if(mag==null){ // this phone gives no linear acceleration: remove gravity here
+      if(!slowOK){slow.x=g.x;slow.y=g.y;slow.z=g.z;slowOK=true;}
+      slow.x+=(g.x-slow.x)*0.1;slow.y+=(g.y-slow.y)*0.1;slow.z+=(g.z-slow.z)*0.1;
+      mag=Math.hypot(g.x-slow.x,g.y-slow.y,g.z-slow.z);
+    }
     const s=IOS?-1:1; // iPhone gives the opposite sign
     lp.x+=(g.x*s-lp.x)*0.2;lp.y+=(g.y*s-lp.y)*0.2;lp.z+=(g.z*s-lp.z)*0.2;
     const m=Math.hypot(lp.x,lp.y,lp.z);
-    if(!oriOK&&now-startT>400&&m>3)setUp(lp.x/m,lp.y/m,lp.z/m,now);
+    if(!oriOK&&now-startT>400&&m>3)setUp(lp.x/m,lp.y/m,lp.z/m,now,false);
   }
   if(mag==null)return;
   motOK=true;
   hitDetect(mag,now);
 }
 function hitDetect(mag,now){ // a jab = a short peak of acceleration
-  const thr=HITS[cfg.hs-1];
+  const base=HITS[cfg.hs-1],since=now-lastHit;
   if(mag>jabNow)jabNow=mag;                           // for the Settings screen: force of the last jab
-  else if(mag<2&&jabNow>3){jabLast=jabNow;jabNow=0;if(!PANEL.hidden)sheet();}
-  if(!armedHit){if(mag<thr*0.55)armedHit=true;return;}
-  if(now-lastHit<150)return;
-  if(mag>thr&&mag>=peak){peak=mag;return;}
-  if(peak>0){const p=peak;peak=0;armedHit=false;lastHit=now;fire(p/thr,now);}
+  else if(mag<1.5&&jabNow>2){jabLast=jabNow;jabNow=0;if(!PANEL.hidden)sheet();}
+  if(mag<valley)valley=mag;                           // lowest force since the last hit
+  if(since<170){peak=0;return;}                       // one jab gives one note: ignore the stop of the same move
+  let thr=base*(1+Math.max(0,turn-5)/6);              // a hit needs more force while the phone turns to a new note
+  if(since<450&&lastPeak*0.5>thr)thr=lastPeak*0.5;    // the move back is weaker than the jab: ignore it
+  if(mag>thr&&mag>valley+base*0.4&&mag>=peak){peak=mag;return;}   // the force goes up: wait for the top
+  if(peak>0){const p=peak;peak=0;lastHit=now;lastPeak=p;valley=mag;fire(p,base,now);}
 }
-function fire(strength,now){
+function fire(p,base,now){
   let i=idx[cur];
   // the jab can move the phone. If the note changed in the last instant, play the note from before.
   if(cfg.mode==='follow'){for(let j=0;j<chg.length;j++){if(now-chg[j].t<60){i=chg[j].from;break;}}}
   chg.length=0;
   if(i!==idx[cur]){idx[cur]=i;drawTiles(0);}
   freezeUntil=now+150;instHold=now+350;
-  play(clamp(0.5+(strength-1)*0.55,0.4,1),i);
+  play(clamp(0.5+(p-base)/16,0.5,1),i);   // a stronger jab is louder
 }
 
 /* ---------- start ---------- */
