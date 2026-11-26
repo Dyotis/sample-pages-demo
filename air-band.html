@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0e0f13">
+<title>Air Band</title>
+<style>
+/*
+VOICE: a stage toy — loud, simple, one big readout you can see at arm's length.
+IDEA: a stage light that changes colour with each instrument.
+PICTURE: full-screen colour field, giant instrument name, live note, tilt meter.
+COLOUR/TYPE: per-instrument colour (amber guitar, ivory/blue piano, red drums), Archivo Black + Inter.
+LAYOUT: one column; header strip, big centre, bottom guide.
+*/
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;600&display=swap');
+:root{--bg:#0e0f13;--ink:#f4f1ea;--acc:#ffb23e}
+*{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 Inter,system-ui,sans-serif;overflow:hidden;
+  transition:background .4s;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#app{height:100%;display:flex;flex-direction:column;padding:max(14px,env(safe-area-inset-top)) 18px max(14px,env(safe-area-inset-bottom))}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:600;font-size:14px}
+.pill{border:1.5px solid currentColor;border-radius:99px;padding:8px 14px;background:none;color:inherit;font:inherit;min-height:44px}
+.pill.on{background:var(--ink);color:var(--bg)}
+main{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:10px}
+#inst{font:clamp(48px,16vw,96px)/1 'Archivo Black',Impact,sans-serif;color:var(--acc);transition:color .3s,transform .15s}
+#how{font-size:15px;opacity:.8;max-width:30ch}
+#note{font:clamp(40px,12vw,72px)/1 'Archivo Black',Impact,sans-serif;min-height:1.1em}
+.hit #inst{transform:scale(1.08)}
+#meter{width:min(320px,85vw);height:46px;position:relative;border-radius:12px;background:rgba(255,255,255,.08);overflow:hidden;display:flex}
+#meter span{flex:1;border-right:1px solid rgba(255,255,255,.1);display:flex;align-items:flex-end;justify-content:center;font-size:12px;padding-bottom:4px;opacity:.7}
+#meter span.cur{background:var(--acc);color:var(--bg);opacity:1;font-weight:600}
+#pad{width:min(320px,85vw);margin-top:6px;padding:16px;border-radius:16px;border:1.5px dashed rgba(255,255,255,.3);font-size:14px;opacity:.75}
+footer{font-size:13px;opacity:.75;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}
+footer div{padding:8px 4px;border-radius:10px;background:rgba(255,255,255,.06)}
+footer b{display:block;font-size:14px}
+footer .cur{outline:2px solid var(--acc)}
+#start{position:fixed;inset:0;background:#0e0f13;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:18px;padding:28px;text-align:center;z-index:5}
+#start h1{font:clamp(44px,14vw,80px)/1 'Archivo Black',Impact,sans-serif;margin:0;color:#ffb23e}
+#start p{max-width:34ch;margin:0;opacity:.85}
+#go{font:20px 'Archivo Black',Impact,sans-serif;padding:18px 40px;border-radius:99px;border:0;background:#ffb23e;color:#0e0f13;min-height:56px}
+#err{color:#ff8a7a;font-size:14px;max-width:34ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}.hit #inst{transform:none}}
+</style>
+</head>
+<body>
+<div id="start">
+  <h1>Air Band</h1>
+  <p>Hold the phone. Move it like a real instrument. Turn the phone to change the instrument.</p>
+  <button id="go">Start playing</button>
+  <p id="err"></p>
+</div>
+
+<div id="app">
+  <header>
+    <button class="pill" id="lock">Auto instrument</button>
+    <span id="sens">Sensors: off</span>
+  </header>
+  <main>
+    <div id="inst">Guitar</div>
+    <div id="how">Strum down. Tilt left or right to change the chord.</div>
+    <div id="note">&nbsp;</div>
+    <div id="meter"></div>
+    <div id="pad">No motion sensor? Tap this area to play.</div>
+  </main>
+  <footer>
+    <div data-i="guitar"><b>Guitar</b>Phone upright</div>
+    <div data-i="piano"><b>Piano</b>Phone flat</div>
+    <div data-i="drums"><b>Drums</b>Phone sideways</div>
+  </footer>
+</div>
+
+<script>
+{
+const $ = s => document.querySelector(s);
+const INST = {
+  guitar:{name:'Guitar',color:'#ffb23e',bg:'#1a1208',how:'Strum down. Tilt left or right to change the chord.',
+    slots:['Em','C','G','D','Am','F']},
+  piano:{name:'Piano',color:'#8fc7ff',bg:'#0b1424',how:'Tap the air (quick jab down). Tilt left or right to pick the note.',
+    slots:['C','D','E','G','A','C5','D5','E5']},
+  drums:{name:'Drums',color:'#ff5a4e',bg:'#200b0b',how:'Hit the air like a drumstick. Tilt to pick the drum.',
+    slots:['Kick','Snare','Hi-hat','Tom','Crash']}
+};
+const CHORDS = { // guitar voicings as MIDI notes, low to high
+  Em:[40,47,52,55,59,64], C:[48,52,55,60,64], G:[43,47,50,55,59,67],
+  D:[50,57,62,66], Am:[45,52,57,60,64], F:[41,48,53,57,60,65]
+};
+const PIANO = {C:60,D:62,E:64,G:67,A:69,C5:72,D5:74,E5:76};
+const mf = m => 440*Math.pow(2,(m-69)/12);
+
+let ctx, master, noiseBuf, cur='guitar', locked=null, slot=0, lastHit=0;
+let grav={x:0,y:-9.8,z:0}, tilt=0, gotMotion=false;
+
+/* ---------- audio ---------- */
+function initAudio(){
+  ctx = new (window.AudioContext||window.webkitAudioContext)();
+  const comp = ctx.createDynamicsCompressor();
+  master = ctx.createGain(); master.gain.value = 0.9;
+  master.connect(comp); comp.connect(ctx.destination);
+  noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+  const d = noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+}
+const ksCache = {};
+function pluckBuf(f){ // Karplus-Strong plucked string
+  const k = Math.round(f);
+  if(ksCache[k]) return ksCache[k];
+  const sr = ctx.sampleRate, len = Math.floor(sr*2.2), N = Math.max(2,Math.round(sr/f));
+  const b = ctx.createBuffer(1,len,sr), o = b.getChannelData(0), ring = new Float32Array(N);
+  for(let i=0;i<N;i++) ring[i]=Math.random()*2-1;
+  let p=0;
+  for(let i=0;i<len;i++){ const n=(p+1)%N; const v=(ring[p]+ring[n])*0.4985; o[i]=ring[p]; ring[p]=v; p=n; }
+  return ksCache[k]=b;
+}
+function strum(name, vel){
+  const notes = CHORDS[name], t0 = ctx.currentTime;
+  notes.forEach((m,i)=>{
+    const s = ctx.createBufferSource(); s.buffer = pluckBuf(mf(m));
+    const g = ctx.createGain(); g.gain.value = 0.32*vel;
+    s.connect(g); g.connect(master); s.start(t0 + i*0.018);
+  });
+}
+function pianoNote(m, vel){
+  const t = ctx.currentTime, f = mf(m), out = ctx.createGain();
+  out.gain.setValueAtTime(0.0001,t); out.gain.exponentialRampToValueAtTime(0.5*vel,t+0.008);
+  out.gain.exponentialRampToValueAtTime(0.0001,t+2.2);
+  const lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = 3500;
+  out.connect(lp); lp.connect(master);
+  [[1,1],[2,0.45],[3,0.2],[4,0.1]].forEach(([h,a])=>{
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = h===1?'triangle':'sine'; o.frequency.value = f*h; g.gain.value = a;
+    o.connect(g); g.connect(out); o.start(t); o.stop(t+2.3);
+  });
+}
+function noise(t, dur, type, freq, gain){
+  const s = ctx.createBufferSource(); s.buffer = noiseBuf;
+  const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+  const g = ctx.createGain(); g.gain.setValueAtTime(gain,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t+dur+0.05);
+}
+function tone(t, f0, f1, dur, gain){
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f1,t+dur*0.6);
+  g.gain.setValueAtTime(gain,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.05);
+}
+function drum(name, vel){
+  const t = ctx.currentTime;
+  if(name==='Kick'){ tone(t,150,45,0.45,1.0*vel); }
+  if(name==='Snare'){ tone(t,220,160,0.12,0.5*vel); noise(t,0.22,'highpass',1500,0.7*vel); }
+  if(name==='Hi-hat'){ noise(t,0.07,'highpass',7500,0.5*vel); }
+  if(name==='Tom'){ tone(t,180,90,0.35,0.8*vel); }
+  if(name==='Crash'){ noise(t,1.4,'highpass',5000,0.55*vel); noise(t,0.6,'bandpass',3000,0.3*vel); }
+}
+
+/* ---------- play ---------- */
+function play(vel){
+  if(!ctx) return;
+  vel = Math.min(1, Math.max(0.35, vel));
+  const label = INST[cur].slots[slot];
+  if(cur==='guitar') strum(label, vel);
+  else if(cur==='piano') pianoNote(PIANO[label], vel);
+  else drum(label, vel);
+  $('#note').textContent = label;
+  document.body.classList.add('hit');
+  setTimeout(()=>document.body.classList.remove('hit'),120);
+  if(navigator.vibrate) try{navigator.vibrate(15)}catch(e){}
+}
+
+/* ---------- position -> instrument ---------- */
+function pickInstrument(){
+  if(locked) return locked;
+  const ax=Math.abs(grav.x), ay=Math.abs(grav.y), az=Math.abs(grav.z);
+  if(az > ax && az > ay) return 'piano';   // lying flat
+  if(ax > ay) return 'drums';              // held sideways (landscape)
+  return 'guitar';                          // held upright (portrait)
+}
+function tiltAngle(){
+  // left-right tilt in degrees, measured around the axis the phone points along
+  if(cur==='piano') return Math.atan2(grav.x, Math.abs(grav.z)) * 57.3;          // roll while flat
+  if(cur==='drums') return Math.atan2(grav.z, Math.abs(grav.x)) * 57.3;          // tip toward/away while sideways
+  return Math.atan2(grav.x, Math.abs(grav.y)) * 57.3;                            // lean while upright
+}
+function updateSlot(){
+  const n = INST[cur].slots.length, a = Math.max(-40, Math.min(40, tilt));
+  slot = Math.min(n-1, Math.floor((a+40)/80*n));
+  [...$('#meter').children].forEach((el,i)=>el.classList.toggle('cur',i===slot));
+}
+function render(){
+  const I = INST[cur];
+  $('#inst').textContent = I.name; $('#how').textContent = I.how;
+  document.body.style.background = I.bg;
+  document.documentElement.style.setProperty('--acc', I.color);
+  $('#meter').innerHTML = I.slots.map(s=>`<span>${s}</span>`).join('');
+  document.querySelectorAll('footer div').forEach(d=>d.classList.toggle('cur', d.dataset.i===cur));
+  updateSlot();
+}
+function setInstrument(i){ if(i!==cur){ cur=i; $('#note').innerHTML='&nbsp;'; render(); } }
+
+/* ---------- sensors ---------- */
+let stable=null, stableSince=0, prevMag=0;
+function onMotion(e){
+  const g = e.accelerationIncludingGravity; if(!g || g.x===null) return;
+  if(!gotMotion){ gotMotion=true; $('#sens').textContent='Sensors: on'; }
+  // smooth gravity (low-pass)
+  const k=0.15; grav.x+=(g.x-grav.x)*k; grav.y+=(g.y-grav.y)*k; grav.z+=(g.z-grav.z)*k;
+  // instrument changes only after the position holds for 350 ms (prevents flicker)
+  const want = pickInstrument(), now = performance.now();
+  if(want!==stable){ stable=want; stableSince=now; }
+  else if(now-stableSince>350) setInstrument(want);
+  tilt = tiltAngle(); updateSlot();
+  // hit detection: quick jerk = a strum / hit
+  let a = e.acceleration, mag;
+  if(a && a.x!==null) mag = Math.hypot(a.x,a.y,a.z);
+  else mag = Math.hypot(g.x-grav.x, g.y-grav.y, g.z-grav.z);
+  const thr = cur==='piano' ? 9 : 12, gap = cur==='drums' ? 140 : 220;
+  if(mag>thr && prevMag<=thr && now-lastHit>gap){ lastHit=now; play((mag-thr)/18+0.45); }
+  prevMag = mag;
+}
+
+async function start(){
+  try{ initAudio(); await ctx.resume(); }catch(e){ $('#err').textContent='Audio failed: '+e.message; return; }
+  try{
+    if(typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
+      const r = await DeviceMotionEvent.requestPermission();
+      if(r!=='granted') $('#sens').textContent='Sensors: denied';
+    }
+  }catch(e){ $('#sens').textContent='Sensors: need https'; }
+  window.addEventListener('devicemotion', onMotion);
+  try{ if(navigator.wakeLock) await navigator.wakeLock.request('screen'); }catch(e){}
+  $('#start').style.display='none';
+  render();
+  setTimeout(()=>{ if(!gotMotion) $('#sens').textContent='Sensors: not found'; }, 2000);
+}
+$('#go').addEventListener('click', start);
+
+/* tap fallback + manual lock */
+$('#pad').addEventListener('pointerdown', e=>{
+  if(!gotMotion){ // without sensors, tap position picks the slot
+    const r=e.currentTarget.getBoundingClientRect(); tilt=((e.clientX-r.left)/r.width)*80-40; updateSlot();
+  }
+  play(0.8);
+});
+const order=[null,'guitar','piano','drums'];
+$('#lock').addEventListener('click', ()=>{
+  locked = order[(order.indexOf(locked)+1)%order.length];
+  $('#lock').textContent = locked ? 'Locked: '+INST[locked].name : 'Auto instrument';
+  $('#lock').classList.toggle('on', !!locked);
+  if(locked) setInstrument(locked);
+});
+document.addEventListener('keydown', e=>{ if(e.key===' '){ e.preventDefault(); play(0.8); }});
+render();
+}
+</script>
+</body>
+</html>
