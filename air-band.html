@@ -198,40 +198,77 @@ function render(){
 function setInstrument(i){ if(i!==cur){ cur=i; $('#note').innerHTML='&nbsp;'; render(); } }
 
 /* ---------- sensors ---------- */
-let stable=null, stableSince=0, prevMag=0;
-function onMotion(e){
-  const g = e.accelerationIncludingGravity; if(!g || g.x===null) return;
-  if(!gotMotion){ gotMotion=true; $('#sens').textContent='Sensors: on'; }
+let stable=null, stableSince=0, prevMag=0, src='', permNote='', lastOrient=null;
+function feed(gx,gy,gz,lin){
+  const now = performance.now();
   // smooth gravity (low-pass)
-  const k=0.15; grav.x+=(g.x-grav.x)*k; grav.y+=(g.y-grav.y)*k; grav.z+=(g.z-grav.z)*k;
+  const k=0.15; grav.x+=(gx-grav.x)*k; grav.y+=(gy-grav.y)*k; grav.z+=(gz-grav.z)*k;
   // instrument changes only after the position holds for 350 ms (prevents flicker)
-  const want = pickInstrument(), now = performance.now();
+  const want = pickInstrument();
   if(want!==stable){ stable=want; stableSince=now; }
   else if(now-stableSince>350) setInstrument(want);
   tilt = tiltAngle(); updateSlot();
   // hit detection: quick jerk = a strum / hit
-  let a = e.acceleration, mag;
-  if(a && a.x!==null) mag = Math.hypot(a.x,a.y,a.z);
-  else mag = Math.hypot(g.x-grav.x, g.y-grav.y, g.z-grav.z);
+  const mag = lin!=null ? lin : Math.hypot(gx-grav.x, gy-grav.y, gz-grav.z);
   const thr = cur==='piano' ? 9 : 12, gap = cur==='drums' ? 140 : 220;
   if(mag>thr && prevMag<=thr && now-lastHit>gap){ lastHit=now; play((mag-thr)/18+0.45); }
   prevMag = mag;
 }
+function sensorOn(name){
+  if(src) return; src=name; gotMotion=true;
+  $('#sens').textContent='Sensors: on ('+name+')';
+}
+function onMotion(e){
+  const g = e.accelerationIncludingGravity;
+  if(!g || g.x==null) return;
+  sensorOn('motion');
+  if(src!=='motion') return;
+  const a = e.acceleration;
+  feed(g.x, g.y, g.z, (a && a.x!=null) ? Math.hypot(a.x,a.y,a.z) : null);
+}
+function onOrient(e){
+  if(e.beta==null || e.gamma==null) return;
+  sensorOn('tilt');
+  if(src!=='tilt') return;
+  // gravity vector from the tilt angles
+  const b=e.beta*Math.PI/180, c=e.gamma*Math.PI/180;
+  const gx=-9.8*Math.cos(b)*Math.sin(c), gy=9.8*Math.sin(b), gz=9.8*Math.cos(b)*Math.cos(c);
+  // hit = fast turn of the wrist (degrees changed since last event, scaled)
+  let lin=null, now=performance.now();
+  if(lastOrient){ const dt=Math.max(8,now-lastOrient.t);
+    lin=(Math.abs(e.beta-lastOrient.b)+Math.abs(e.gamma-lastOrient.c))/dt*6; }
+  lastOrient={b:e.beta,c:e.gamma,t:now};
+  feed(gx,gy,gz,lin);
+}
 
-async function start(){
-  try{ initAudio(); await ctx.resume(); }catch(e){ $('#err').textContent='Audio failed: '+e.message; return; }
+function start(){
+  // iPhone: ask for permission FIRST, inside the tap, before any await
+  const asks=[];
   try{
-    if(typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
-      const r = await DeviceMotionEvent.requestPermission();
-      if(r!=='granted') $('#sens').textContent='Sensors: denied';
-    }
-  }catch(e){ $('#sens').textContent='Sensors: need https'; }
+    if(typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function')
+      asks.push(DeviceMotionEvent.requestPermission());
+    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function')
+      asks.push(DeviceOrientationEvent.requestPermission());
+  }catch(e){ permNote='permission error: '+e.message; }
+  try{ initAudio(); ctx.resume(); }catch(e){ $('#err').textContent='Audio failed: '+e.message; return; }
   window.addEventListener('devicemotion', onMotion);
-  try{ if(navigator.wakeLock) await navigator.wakeLock.request('screen'); }catch(e){}
+  window.addEventListener('deviceorientation', onOrient);
+  Promise.all(asks).then(r=>{ if(r.some(x=>x!=='granted')) permNote='permission denied'; })
+    .catch(e=>{ permNote='permission blocked: '+e.message; });
+  try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').catch(()=>{}); }catch(e){}
   $('#start').style.display='none';
   render();
-  setTimeout(()=>{ if(!gotMotion) $('#sens').textContent='Sensors: not found'; }, 2000);
+  setTimeout(()=>{
+    if(gotMotion) return;
+    let why = permNote ||
+      (!window.isSecureContext ? 'page is not https' :
+      (typeof DeviceMotionEvent==='undefined' ? 'browser has no motion support' :
+      'no data. Open in Chrome or Safari, not inside another app'));
+    $('#sens').textContent='Sensors: off';
+    $('#pad').innerHTML='Sensors off: '+why+'.<br>Tap here to play. Or <u id="retry">tap to retry sensors</u>.';
+  }, 2500);
 }
+document.addEventListener('click', e=>{ if(e.target.id==='retry'){ e.stopPropagation(); location.reload(); }}, true);
 $('#go').addEventListener('click', start);
 
 /* tap fallback + manual lock */
